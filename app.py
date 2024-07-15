@@ -5,8 +5,13 @@ import numpy as np
 import faiss
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+# Initialize the tokenizer and language model
+model_name = "facebook/opt-1.3b"  # or any other language model
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+lm_model = AutoModelForCausalLM.from_pretrained(model_name)
+
 # Load SciBERT model
-model = SentenceTransformer('allenai/scibert_scivocab_uncased')
+scibert_model = SentenceTransformer('allenai/scibert_scivocab_uncased')
 
 # Function to extract text from a PDF file
 def extract_text_from_pdf(file_path):
@@ -25,8 +30,8 @@ def split_text(text, chunk_size=512):
 
 # Function to retrieve relevant chunks using FAISS
 def retrieve(query, top_k=5):
-    query_embedding = model.encode([query])
-    distances, indices = index.search(query_embedding, top_k)
+    query_embedding = scibert_model.encode([query])
+    distances, indices = index.search(np.array(query_embedding), top_k)
     results = [text_chunks[idx] for idx in indices[0]]
     return results
 
@@ -34,7 +39,12 @@ def retrieve(query, top_k=5):
 def generate_response(query, top_k=5, max_new_tokens=50, max_length=512):
     retrieved_chunks = retrieve(query, top_k)
     context = " ".join(retrieved_chunks)
+    
+    # Truncate context if necessary
     input_text = query + " " + context
+    input_ids = tokenizer.encode(input_text, truncation=True, max_length=max_length)
+    
+    # Generate response
     inputs = tokenizer(input_text, return_tensors="pt", truncation=True, max_length=max_length)
     outputs = lm_model.generate(**inputs, max_new_tokens=max_new_tokens)
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -54,7 +64,7 @@ if uploaded_file is not None:
     text_chunks = split_text(pdf_text)
     
     # Generate embeddings
-    embeddings = model.encode(text_chunks, show_progress_bar=True)
+    embeddings = scibert_model.encode(text_chunks, show_progress_bar=True)
     
     # Initialize FAISS
     embeddings = np.array(embeddings)
@@ -66,6 +76,9 @@ if uploaded_file is not None:
     query = st.text_input("Enter your query")
     
     if query:
-        response = generate_response(query)
-        st.subheader("Response")
-        st.write(response)
+        try:
+            response = generate_response(query)
+            st.subheader("Response")
+            st.write(response)
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
