@@ -1,5 +1,5 @@
 import streamlit as st
-import fitz  # PyMuPDF
+import PyPDF2
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import faiss
@@ -10,11 +10,12 @@ model = SentenceTransformer('allenai/scibert_scivocab_uncased')
 
 # Function to extract text from a PDF file
 def extract_text_from_pdf(file_path):
-    doc = fitz.open(file_path)
-    text = ""
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        text += page.get_text()
+    with open(file_path, 'rb') as file:
+        reader = PyPDF2.PdfReader(file)
+        text = ""
+        for page_num in range(len(reader.pages)):
+            page = reader.pages[page_num]
+            text += page.extract_text()
     return text
 
 # Function to split text into chunks
@@ -45,7 +46,9 @@ uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
 
 if uploaded_file is not None:
     # Extract text from the uploaded PDF
-    pdf_text = extract_text_from_pdf(uploaded_file)
+    with open("uploaded_file.pdf", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    pdf_text = extract_text_from_pdf("uploaded_file.pdf")
     
     # Split the extracted text into chunks
     text_chunks = split_text(pdf_text)
